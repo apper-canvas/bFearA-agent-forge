@@ -35,7 +35,7 @@ const MainFeature = () => {
     {
       type: 'agent',
       label: 'AI Agent',
-      icon: <Cpu size={18} />,
+      icon: <Cpu size={18} className="text-white" />,
       color: 'bg-gradient-to-br from-blue-400 to-blue-600',
       inputs: ['memory', 'tools', 'retriever'],
       outputs: ['response'],
@@ -53,7 +53,7 @@ const MainFeature = () => {
     {
       type: 'memory',
       label: 'Memory',
-      icon: <Brain size={18} />,
+      icon: <Brain size={18} className="text-white" />,
       color: 'bg-gradient-to-br from-purple-400 to-purple-600',
       inputs: [],
       outputs: ['context'],
@@ -66,7 +66,7 @@ const MainFeature = () => {
     {
       type: 'retriever',
       label: 'Retriever',
-      icon: <Database size={18} />,
+      icon: <Database size={18} className="text-white" />,
       color: 'bg-gradient-to-br from-green-400 to-green-600',
       inputs: ['query'],
       outputs: ['documents'],
@@ -79,7 +79,7 @@ const MainFeature = () => {
     {
       type: 'documentLoader',
       label: 'Document Loader',
-      icon: <FileText size={18} />,
+      icon: <FileText size={18} className="text-white" />,
       color: 'bg-gradient-to-br from-yellow-400 to-yellow-600',
       inputs: [],
       outputs: ['documents'],
@@ -93,7 +93,7 @@ const MainFeature = () => {
     {
       type: 'vectorStore',
       label: 'Vector Store',
-      icon: <Database size={18} />,
+      icon: <Database size={18} className="text-white" />,
       color: 'bg-gradient-to-br from-red-400 to-red-600',
       inputs: ['documents'],
       outputs: ['vectors'],
@@ -106,7 +106,7 @@ const MainFeature = () => {
     {
       type: 'outputTransformer',
       label: 'Output Transformer',
-      icon: <Zap size={18} />,
+      icon: <Zap size={18} className="text-white" />,
       color: 'bg-gradient-to-br from-indigo-400 to-indigo-600',
       inputs: ['input'],
       outputs: ['output'],
@@ -120,7 +120,7 @@ const MainFeature = () => {
     {
       type: 'tool',
       label: 'Tool',
-      icon: <Workflow size={18} />,
+      icon: <Workflow size={18} className="text-white" />,
       color: 'bg-gradient-to-br from-teal-400 to-teal-600',
       inputs: ['parameters'],
       outputs: ['result'],
@@ -406,7 +406,7 @@ const MainFeature = () => {
     // Create a custom drag image
     const dragPreview = document.createElement('div')
     const nodeType = nodeTypes.find(nt => nt.type === type)
-    dragPreview.className = `${nodeType.color} rounded-lg p-3 text-white shadow-lg opacity-80 flex items-center gap-2 w-[200px]`
+    dragPreview.className = `${nodeType.color} rounded-n8n p-3 text-white shadow-lg opacity-80 flex items-center gap-2 w-[200px]`
     dragPreview.innerHTML = `<div>${nodeType.icon.type.render()}</div><span class="font-medium">${nodeType.label}</span>`
     document.body.appendChild(dragPreview)
     e.dataTransfer.setDragImage(dragPreview, 100, 30)
@@ -862,9 +862,7 @@ const MainFeature = () => {
     return (
       <div
         key={node.id}
-        className={`absolute ${node.color} rounded-lg shadow-lg overflow-hidden transition-shadow cursor-move ${
-          isSelected ? 'ring-2 ring-white dark:ring-surface-900 shadow-xl scale-[1.02]' : ''
-        }`}
+        className={`absolute n8n-node ${isSelected ? 'n8n-node-selected' : ''}`}
         style={{
           left: node.position.x,
           top: node.position.y,
@@ -873,10 +871,10 @@ const MainFeature = () => {
         }}
         onMouseDown={(e) => handleNodeMouseDown(e, node.id)}
       >
-        <div className="bg-black bg-opacity-20 px-3 py-2 flex items-center justify-between">
+        <div className={`n8n-node-header ${nodeType.color} bg-opacity-90`}>
           <div className="flex items-center gap-2 text-white">
             {nodeType.icon}
-            <span className="font-medium">{node.data.name || node.label}</span>
+            <span className="font-medium text-sm">{node.data.name || node.label}</span>
           </div>
           <div className="flex items-center">
             <button 
@@ -892,7 +890,7 @@ const MainFeature = () => {
           </div>
         </div>
         
-        <div className="bg-white dark:bg-surface-800 p-3 text-sm">
+        <div className="p-3 text-sm">
           {/* Input ports */}
           <div className="mb-2">
             {node.inputs && node.inputs.map(input => {
@@ -906,12 +904,12 @@ const MainFeature = () => {
               const hasMemory = isMemoryPortOnAgent && hasMemoryConnected(node.id)
               
               return (
-                <div key={input} className="flex items-center gap-2 mb-2 relative">
+                <div key={input} className="n8n-port-container">
                   <div 
-                    className={`port port-input
-                      ${isHovered ? 'port-hover' : ''}
-                      ${isValidTarget ? 'port-valid port-highlighted' : ''}
-                      ${isConnected ? 'bg-primary-light border-white dark:border-surface-800' : ''}
+                    className={`n8n-port n8n-port-input
+                      ${isHovered ? 'n8n-port-hover' : ''}
+                      ${isValidTarget ? 'n8n-port-valid' : ''}
+                      ${isConnected ? 'n8n-port-connected' : ''}
                       ${hasMemory ? 'bg-purple-500 border-white dark:border-surface-800' : ''}
                       ${isAddingConnection && connectingFrom ? 'animate-pulse' : ''}
                     `}
@@ -922,7 +920,7 @@ const MainFeature = () => {
                     onMouseLeave={handlePortMouseLeave}
                     onMouseDown={(e) => handlePortMouseDown(e, node.id, input, true)}
                   />
-                  <span className="text-xs text-surface-600 dark:text-surface-400">
+                  <span className="pl-4 text-xs text-surface-600 dark:text-surface-400">
                     {input}
                     {isMemoryPortOnAgent && hasMemory && (
                       <span className="ml-1 text-green-500 font-bold">●</span>
@@ -944,18 +942,18 @@ const MainFeature = () => {
               const isConnected = isPortConnected(node.id, output, false)
               
               return (
-                <div key={output} className="flex items-center justify-end gap-2 mb-2 relative">
-                  <span className="text-xs text-surface-600 dark:text-surface-400">
+                <div key={output} className="n8n-port-container justify-end">
+                  <span className="text-xs text-surface-600 dark:text-surface-400 text-right pr-4 w-full">
                     {output}
                     {isConnected && (
                       <span className="ml-1 text-green-500 font-bold">●</span>
                     )}
                   </span>
                   <div 
-                    className={`port port-output
-                      ${isHovered ? 'port-hover' : ''}
-                      ${isConnecting ? 'port-active' : ''}
-                      ${isConnected ? 'bg-primary-light border-white dark:border-surface-800' : ''}
+                    className={`n8n-port n8n-port-output
+                      ${isHovered ? 'n8n-port-hover' : ''}
+                      ${isConnecting ? 'n8n-port-active' : ''}
+                      ${isConnected ? 'n8n-port-connected' : ''}
                     `}
                     data-node-id={node.id}
                     data-port-id={output}
@@ -1040,7 +1038,7 @@ const MainFeature = () => {
               <g 
                 key={connection.id} 
                 onClick={(e) => handleConnectionClick(e, connection.id)}
-                className="cursor-pointer"
+                className="cursor-pointer n8n-connection"
                 style={{ pointerEvents: 'all' }}
               >
                 {/* Define gradient for this connection */}
@@ -1053,8 +1051,8 @@ const MainFeature = () => {
                       </>
                     ) : (
                       <>
-                        <stop offset="0%" stopColor="#3b82f6" />
-                        <stop offset="100%" stopColor="#2563eb" />
+                        <stop offset="0%" stopColor="#6698FF" />
+                        <stop offset="100%" stopColor="#4D7FFF" />
                       </>
                     )}
                   </linearGradient>
@@ -1074,9 +1072,9 @@ const MainFeature = () => {
                   stroke={isSelected ? '#ffffff' : `url(#${gradientId})`}
                   strokeWidth={isSelected ? '3' : '2'}
                   fill="none"
-                  className={`connection-path ${
+                  className={`n8n-connection-path ${
                     isSelected 
-                      ? 'text-primary-light filter drop-shadow-lg' 
+                      ? 'n8n-connection-selected' 
                       : ''
                   }`}
                 />
@@ -1086,13 +1084,13 @@ const MainFeature = () => {
                   cx={sourceX} 
                   cy={sourceY} 
                   r="4" 
-                  fill={isMemoryConnection ? '#a855f7' : '#3b82f6'} 
+                  fill={isMemoryConnection ? '#a855f7' : '#6698FF'} 
                 />
                 <circle 
                   cx={targetX} 
                   cy={targetY} 
                   r="4" 
-                  fill={isMemoryConnection ? '#8b5cf6' : '#2563eb'} 
+                  fill={isMemoryConnection ? '#8b5cf6' : '#4D7FFF'} 
                 />
                 
                 {/* Connection label */}
@@ -1105,7 +1103,7 @@ const MainFeature = () => {
                     style={{ pointerEvents: 'none' }}
                   >
                     <div className="flex items-center justify-center h-full">
-                      <div className={`connection-label ${
+                      <div className={`n8n-connection-label ${
                         isSelected 
                           ? 'ring-2 ring-primary shadow-md' 
                           : isMemoryConnection 
@@ -1127,8 +1125,8 @@ const MainFeature = () => {
           <g>
             <defs>
               <linearGradient id="temp-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                <stop offset="0%" stopColor="#3b82f6" />
-                <stop offset="100%" stopColor="#60a5fa" />
+                <stop offset="0%" stopColor="#6698FF" />
+                <stop offset="100%" stopColor="#87B5FF" />
               </linearGradient>
             </defs>
             <path
@@ -1137,19 +1135,19 @@ const MainFeature = () => {
               strokeWidth="2"
               strokeDasharray="5,5"
               fill="none"
-              className="connection-line-creating"
+              className="n8n-connection-path"
             />
             <circle 
               cx={temporaryConnection.sourceX} 
               cy={temporaryConnection.sourceY} 
               r="4" 
-              fill="#3b82f6"
+              fill="#6698FF"
             />
             <circle 
               cx={temporaryConnection.targetX} 
               cy={temporaryConnection.targetY} 
               r="4" 
-              fill="#60a5fa"
+              fill="#87B5FF"
               className="animate-ping" 
             />
           </g>
@@ -1407,9 +1405,9 @@ const MainFeature = () => {
             animate={{ width: 250, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-white dark:bg-surface-800 border-r border-surface-200 dark:border-surface-700 flex flex-col h-full overflow-hidden"
+            className="n8n-panel border-r flex flex-col h-full overflow-hidden"
           >
-            <div className="p-3 border-b border-surface-200 dark:border-surface-700 flex items-center justify-between">
+            <div className="n8n-panel-header">
               <h3 className="font-medium">Components</h3>
               <button
                 onClick={() => setShowNodePanel(false)}
@@ -1419,13 +1417,13 @@ const MainFeature = () => {
               </button>
             </div>
             
-            <div className="flex-grow overflow-y-auto p-3 space-y-2">
+            <div className="n8n-panel-body space-y-3">
               {nodeTypes.map(nodeType => (
                 <motion.div
                   key={nodeType.type}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`${nodeType.color} rounded-lg p-3 text-white cursor-grab shadow-sm hover:shadow-md transition-all duration-200`}
+                  className={`${nodeType.color} rounded-n8n p-3 text-white cursor-grab shadow-sm hover:shadow-md transition-all duration-200`}
                   onClick={() => addNode(nodeType.type)}
                   draggable
                   onDragStart={(e) => handleDragStart(e, nodeType.type)}
@@ -1443,7 +1441,7 @@ const MainFeature = () => {
       </AnimatePresence>
       
       {/* Canvas */}
-      <div className="flex-grow relative overflow-hidden bg-surface-100 dark:bg-surface-800 border-r border-surface-200 dark:border-surface-700">
+      <div className="flex-grow relative overflow-hidden n8n-canvas border-r">
         {/* Connection mode indicator */}
         {isAddingConnection && (
           <div className="absolute top-14 left-1/2 transform -translate-x-1/2 z-20 bg-primary text-white px-4 py-2 rounded-lg shadow-lg">
@@ -1524,27 +1522,6 @@ const MainFeature = () => {
               transformOrigin: '0 0'
             }}
           >
-            {/* Grid background */}
-            <div
-              className="absolute inset-0 bg-surface-100 dark:bg-surface-800"
-              style={{
-                backgroundImage: `
-                  linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
-                  linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px)
-                `,
-                backgroundSize: '20px 20px'
-              }}
-            />
-            
-            {/* Drop zone indicator when dragging a component */}
-            {isDraggingComponent && (
-              <div className="absolute inset-0 border-2 border-dashed border-primary-light bg-primary-light bg-opacity-5 rounded-lg pointer-events-none">
-                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-primary text-opacity-70 font-medium">
-                  Drop to add {draggedComponentType && nodeTypes.find(nt => nt.type === draggedComponentType)?.label}
-                </div>
-              </div>
-            )}
-            
             {/* Connections */}
             {renderConnections()}
             
@@ -1574,7 +1551,7 @@ const MainFeature = () => {
             animate={{ width: 300, opacity: 1 }}
             exit={{ width: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="bg-white dark:bg-surface-800 h-full overflow-hidden flex flex-col"
+            className="n8n-panel h-full overflow-hidden flex flex-col"
           >
             <div className="border-b border-surface-200 dark:border-surface-700">
               <div className="flex">
@@ -1583,10 +1560,10 @@ const MainFeature = () => {
                     setShowPropertiesPanel(true)
                     setShowJsonPanel(false)
                   }}
-                  className={`flex-1 py-3 px-4 text-sm font-medium ${
+                  className={`n8n-panel-tab ${
                     showPropertiesPanel
-                      ? 'text-primary border-b-2 border-primary'
-                      : 'text-surface-600 dark:text-surface-400'
+                      ? 'n8n-panel-tab-active'
+                      : 'n8n-panel-tab-inactive'
                   }`}
                 >
                   Properties
@@ -1597,10 +1574,10 @@ const MainFeature = () => {
                     setShowPropertiesPanel(false)
                     setShowJsonPanel(true)
                   }}
-                  className={`flex-1 py-3 px-4 text-sm font-medium ${
+                  className={`n8n-panel-tab ${
                     showJsonPanel
-                      ? 'text-primary border-b-2 border-primary'
-                      : 'text-surface-600 dark:text-surface-400'
+                      ? 'n8n-panel-tab-active'
+                      : 'n8n-panel-tab-inactive'
                   }`}
                 >
                   JSON

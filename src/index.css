@@ -3,117 +3,128 @@
 @tailwind utilities;
 
 @layer base {
-  html {
-    @apply antialiased;
-  }
-  
   body {
-    @apply font-sans;
+    @apply bg-gray-50 text-surface-900 dark:bg-surface-900 dark:text-surface-50;
   }
-  
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-heading;
+
+  .btn {
+    @apply inline-flex items-center justify-center rounded-lg px-4 py-2 font-medium transition-colors duration-200;
+  }
+
+  .btn-primary {
+    @apply bg-primary text-white hover:bg-primary-dark;
+  }
+
+  .btn-outline {
+    @apply border border-surface-200 bg-white text-surface-700 hover:bg-surface-50 dark:border-surface-700 dark:bg-surface-800 dark:text-surface-300 dark:hover:bg-surface-700;
+  }
+
+  .input {
+    @apply w-full rounded-lg border border-surface-200 bg-white px-3 py-2 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary dark:border-surface-700 dark:bg-surface-800;
   }
 }
 
 @layer components {
-  .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-all duration-200 focus:outline-none focus:ring-2 focus:ring-offset-2;
-  }
-  
-  .btn-primary {
-    @apply bg-primary text-white hover:bg-primary-dark focus:ring-primary;
-  }
-  
-  .btn-secondary {
-    @apply bg-secondary text-white hover:bg-secondary-dark focus:ring-secondary;
-  }
-  
-  .btn-outline {
-    @apply border border-surface-300 dark:border-surface-600 hover:bg-surface-100 dark:hover:bg-surface-700 focus:ring-surface-400;
-  }
-  
-  .card {
-    @apply bg-white dark:bg-surface-800 rounded-xl shadow-card border border-surface-200 dark:border-surface-700 overflow-hidden;
-  }
-  
-  .input {
-    @apply w-full px-3 py-2 bg-white dark:bg-surface-800 border border-surface-300 dark:border-surface-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent;
-  }
-}
-
-@layer utilities {
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
-  
-  .node-handle {
-    @apply w-3 h-3 bg-primary rounded-full border-2 border-white dark:border-surface-800 absolute;
-  }
-  
-  .node-handle-top {
-    @apply top-0 left-1/2 -translate-x-1/2 -translate-y-1/2;
-  }
-  
-  .node-handle-right {
-    @apply top-1/2 right-0 translate-x-1/2 -translate-y-1/2;
-  }
-  
-  .node-handle-bottom {
-    @apply bottom-0 left-1/2 -translate-x-1/2 translate-y-1/2;
-  }
-  
-  .node-handle-left {
-    @apply top-1/2 left-0 -translate-x-1/2 -translate-y-1/2;
-  }
-  
-  .connection-label {
-    @apply px-2 py-1 rounded text-xs bg-white dark:bg-surface-700 text-surface-800 dark:text-white border border-surface-200 dark:border-surface-600 shadow-sm;
+  /* N8N-style Canvas */
+  .n8n-canvas {
+    @apply bg-n8n-canvas dark:bg-n8n-canvasDark transition-colors duration-300;
+    background-size: 20px 20px;
+    background-image: 
+      linear-gradient(to right, rgba(133, 150, 180, 0.1) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(133, 150, 180, 0.1) 1px, transparent 1px);
   }
 
-  /* New connection utility classes */
-  .port {
-    @apply w-4 h-4 rounded-full cursor-pointer transition-all duration-150 ease-in-out border-2 z-10;
+  .dark .n8n-canvas {
+    background-image: 
+      linear-gradient(to right, rgba(133, 150, 180, 0.07) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(133, 150, 180, 0.07) 1px, transparent 1px);
   }
 
-  .port-input {
-    @apply bg-surface-300 dark:bg-surface-600 border-white dark:border-surface-800;
+  /* N8N-style Node */
+  .n8n-node {
+    @apply bg-n8n-node dark:bg-n8n-nodeDark rounded-n8n shadow-n8n-node dark:shadow-n8n-node-dark transition-all duration-200 border border-surface-200 dark:border-surface-700 overflow-hidden;
   }
 
-  .port-output {
-    @apply bg-surface-300 dark:bg-surface-600 border-white dark:border-surface-800;
+  .n8n-node-selected {
+    @apply shadow-n8n-node-selected dark:shadow-n8n-node-selected scale-[1.01];
   }
 
-  .port-hover {
-    @apply bg-primary border-white dark:border-surface-800 shadow-md transform scale-110;
+  .n8n-node-header {
+    @apply py-2 px-3 flex items-center justify-between border-b border-surface-200 dark:border-surface-700;
   }
 
-  .port-active {
-    @apply bg-primary-light border-white dark:border-surface-800 shadow-lg scale-125;
+  /* N8N-style Ports */
+  .n8n-port-container {
+    @apply relative my-1 h-7 flex items-center;
   }
 
-  .port-valid {
-    @apply bg-green-500 border-white dark:border-surface-800 animate-pulse;
+  .n8n-port {
+    @apply w-4 h-4 rounded-full border-2 border-surface-300 dark:border-surface-600 bg-n8n-port dark:bg-n8n-portDark transition-colors duration-200;
   }
 
-  .port-invalid {
-    @apply bg-red-500 border-white dark:border-surface-800;
+  .n8n-port-input {
+    @apply absolute -left-2;
   }
 
-  .port-highlighted {
-    @apply ring-2 ring-primary ring-offset-1 ring-offset-white dark:ring-offset-surface-800 scale-125;
+  .n8n-port-output {
+    @apply absolute -right-2;
   }
 
-  .connection-path {
-    @apply transition-all duration-200 ease-in-out;
+  .n8n-port-hover {
+    @apply border-n8n-portHover bg-n8n-portHover;
   }
 
-  .connection-line-creating {
-    @apply stroke-2 stroke-primary animate-pulse;
+  .n8n-port-active {
+    @apply border-n8n-portActive bg-n8n-portActive;
+  }
+
+  .n8n-port-connected {
+    @apply border-primary bg-primary-light;
+  }
+
+  .n8n-port-valid {
+    @apply border-green-500 bg-green-400 animate-pulse;
+  }
+
+  /* N8N-style Connection lines */
+  .n8n-connection {
+    @apply transition-all duration-200 stroke-2;
+  }
+
+  .n8n-connection-path {
+    @apply dark:stroke-n8n-connectionDark;
+  }
+
+  .n8n-connection-selected {
+    @apply stroke-primary-dark filter drop-shadow;
+  }
+
+  .n8n-connection-label {
+    @apply bg-white dark:bg-surface-800 text-xs px-2 py-0.5 rounded-md border border-surface-200 dark:border-surface-700 shadow-sm whitespace-nowrap text-center;
+  }
+
+  /* N8N-style Control panels */
+  .n8n-panel {
+    @apply bg-white dark:bg-surface-800 border-surface-200 dark:border-surface-700 shadow-md transition-all duration-200;
+  }
+
+  .n8n-panel-header {
+    @apply border-b border-surface-200 dark:border-surface-700 p-3 flex items-center justify-between;
+  }
+
+  .n8n-panel-body {
+    @apply p-3 overflow-y-auto;
+  }
+
+  .n8n-panel-tab {
+    @apply py-3 px-4 text-sm font-medium flex-1 border-b-2 transition-colors duration-200;
+  }
+
+  .n8n-panel-tab-active {
+    @apply border-primary text-primary;
+  }
+
+  .n8n-panel-tab-inactive {
+    @apply border-transparent text-surface-600 hover:text-surface-800 dark:text-surface-400 dark:hover:text-surface-200;
   }
 }
