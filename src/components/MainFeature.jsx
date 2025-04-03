@@ -16,10 +16,13 @@ const MainFeature = () => {
   const [nodes, setNodes] = useState([])
   const [connections, setConnections] = useState([])
   const [selectedNode, setSelectedNode] = useState(null)
+  const [selectedConnection, setSelectedConnection] = useState(null)
   const [connectingFrom, setConnectingFrom] = useState(null)
   const [showNodePanel, setShowNodePanel] = useState(true)
   const [showPropertiesPanel, setShowPropertiesPanel] = useState(true)
   const [showJsonPanel, setShowJsonPanel] = useState(false)
+  const [isAddingConnection, setIsAddingConnection] = useState(false)
+  const [temporaryConnection, setTemporaryConnection] = useState(null)
   
   const canvasRef = useRef(null)
   
@@ -147,7 +150,8 @@ const MainFeature = () => {
         sourceNodeId: conn.source,
         sourcePortId: conn.sourceHandle,
         targetNodeId: conn.target,
-        targetPortId: conn.targetHandle
+        targetPortId: conn.targetHandle,
+        label: conn.label || ''
       }))
     }
     
@@ -187,11 +191,27 @@ const MainFeature = () => {
       }))
       
       setDragStart({ x: e.clientX, y: e.clientY })
+    } else if (isAddingConnection && connectingFrom) {
+      // Update temporary connection while drawing
+      const canvasRect = canvasRef.current.getBoundingClientRect()
+      const x = (e.clientX - canvasRect.left - position.x) / scale
+      const y = (e.clientY - canvasRect.top - position.y) / scale
+      
+      setTemporaryConnection({
+        sourceX: connectingFrom.x,
+        sourceY: connectingFrom.y,
+        targetX: x,
+        targetY: y
+      })
     }
   }
   
   const handleMouseUp = () => {
     setIsDragging(false)
+    if (isAddingConnection) {
+      setIsAddingConnection(false)
+      setTemporaryConnection(null)
+    }
   }
   
   // Add node to canvas
@@ -230,6 +250,7 @@ const MainFeature = () => {
     if (!node) return
     
     setSelectedNode(node)
+    setSelectedConnection(null)
     
     const startX = e.clientX
     const startY = e.clientY
@@ -263,9 +284,46 @@ const MainFeature = () => {
     document.addEventListener('mouseup', handleNodeUp)
   }
   
+  // Calculate port position
+  const getPortPosition = (node, portId, isInput) => {
+    if (!node) return { x: 0, y: 0 }
+    
+    let portIndex, portY
+    if (isInput) {
+      portIndex = node.inputs.findIndex(p => p === portId)
+      portY = 40 + (portIndex * 20)
+    } else {
+      portIndex = node.outputs.findIndex(p => p === portId)
+      portY = 80 + (portIndex * 20)
+    }
+    
+    const x = isInput ? node.position.x : node.position.x + 200
+    const y = node.position.y + portY
+    
+    return { x, y }
+  }
+  
+  // Calculate point on bezier curve
+  const getPointOnCurve = (startX, startY, endX, endY, t) => {
+    const controlPointOffset = Math.min(80, Math.abs(endX - startX) / 2)
+    const cp1x = startX + controlPointOffset
+    const cp1y = startY
+    const cp2x = endX - controlPointOffset
+    const cp2y = endY
+    
+    // Cubic bezier formula
+    const x = (1-t)*(1-t)*(1-t)*startX + 3*(1-t)*(1-t)*t*cp1x + 3*(1-t)*t*t*cp2x + t*t*t*endX
+    const y = (1-t)*(1-t)*(1-t)*startY + 3*(1-t)*(1-t)*t*cp1y + 3*(1-t)*t*t*cp2y + t*t*t*endY
+    
+    return { x, y }
+  }
+  
   // Handle connection creation
   const handlePortMouseDown = (e, nodeId, portId, isInput) => {
     e.stopPropagation()
+    
+    const node = nodes.find(n => n.id === nodeId)
+    if (!node) return
     
     if (isInput) {
       // If connecting to an input port, check if there's already a connection
@@ -274,30 +332,65 @@ const MainFeature = () => {
       )
       
       if (existingConnection) {
-        // Remove the existing connection
-        setConnections(prev => 
-          prev.filter(conn => 
-            !(conn.target === nodeId && conn.targetHandle === portId)
-          )
-        )
+        // Select the existing connection
+        setSelectedConnection(existingConnection)
+        setSelectedNode(null)
+        return
       }
       
       if (connectingFrom) {
         // Create a new connection
-        const newConnection = {
-          id: `conn-${Date.now()}`,
-          source: connectingFrom.nodeId,
-          sourceHandle: connectingFrom.portId,
-          target: nodeId,
-          targetHandle: portId
+        const sourceNode = nodes.find(n => n.id === connectingFrom.nodeId)
+        const targetNode = node
+        
+        if (sourceNode && targetNode) {
+          const sourcePort = connectingFrom.portId
+          const targetPort = portId
+          
+          // Default connection label based on ports
+          const defaultLabel = `${sourcePort} → ${targetPort}`
+          
+          // Show a dialog to add a connection label
+          const label = prompt('Enter connection label:', defaultLabel)
+          
+          if (label !== null) {
+            const newConnection = {
+              id: `conn-${Date.now()}`,
+              source: connectingFrom.nodeId,
+              sourceHandle: connectingFrom.portId,
+              target: nodeId,
+              targetHandle: portId,
+              label: label || defaultLabel
+            }
+            
+            setConnections(prev => [...prev, newConnection])
+            setSelectedConnection(newConnection)
+            setSelectedNode(null)
+          }
         }
         
-        setConnections(prev => [...prev, newConnection])
         setConnectingFrom(null)
+        setIsAddingConnection(false)
+        setTemporaryConnection(null)
       }
     } else {
       // Start connecting from an output port
-      setConnectingFrom({ nodeId, portId })
+      const portPosition = getPortPosition(node, portId, false)
+      setConnectingFrom({ 
+        nodeId, 
+        portId,
+        x: portPosition.x,
+        y: portPosition.y
+      })
+      setIsAddingConnection(true)
+      
+      // Initialize temporary connection
+      setTemporaryConnection({
+        sourceX: portPosition.x,
+        sourceY: portPosition.y,
+        targetX: portPosition.x + 50,
+        targetY: portPosition.y
+      })
     }
   }
   
@@ -312,6 +405,38 @@ const MainFeature = () => {
       )
     )
     setSelectedNode(null)
+  }
+  
+  // Delete selected connection
+  const deleteSelectedConnection = () => {
+    if (!selectedConnection) return
+    
+    setConnections(prev => prev.filter(conn => conn.id !== selectedConnection.id))
+    setSelectedConnection(null)
+  }
+  
+  // Edit connection label
+  const editConnectionLabel = () => {
+    if (!selectedConnection) return
+    
+    const newLabel = prompt('Enter connection label:', selectedConnection.label || '')
+    
+    if (newLabel !== null) {
+      setConnections(prev => prev.map(conn => {
+        if (conn.id === selectedConnection.id) {
+          return {
+            ...conn,
+            label: newLabel
+          }
+        }
+        return conn
+      }))
+      
+      setSelectedConnection(prev => ({
+        ...prev,
+        label: newLabel
+      }))
+    }
   }
   
   // Update node properties
@@ -381,6 +506,25 @@ const MainFeature = () => {
     URL.revokeObjectURL(url)
   }
   
+  // Handle canvas click to deselect
+  const handleCanvasClick = (e) => {
+    if (e.target === canvasRef.current) {
+      setSelectedNode(null)
+      setSelectedConnection(null)
+    }
+  }
+  
+  // Handle connection click
+  const handleConnectionClick = (e, connectionId) => {
+    e.stopPropagation()
+    
+    const connection = connections.find(conn => conn.id === connectionId)
+    if (connection) {
+      setSelectedConnection(connection)
+      setSelectedNode(null)
+    }
+  }
+  
   // Render node on canvas
   const renderNode = (node) => {
     const nodeType = nodeTypes.find(nt => nt.type === node.type)
@@ -413,6 +557,7 @@ const MainFeature = () => {
               onClick={(e) => {
                 e.stopPropagation()
                 setSelectedNode(node)
+                setSelectedConnection(null)
               }}
             >
               <Settings size={14} />
@@ -453,56 +598,180 @@ const MainFeature = () => {
   
   // Render connections between nodes
   const renderConnections = () => {
-    return connections.map(connection => {
-      const sourceNode = nodes.find(n => n.id === connection.source)
-      const targetNode = nodes.find(n => n.id === connection.target)
-      
-      if (!sourceNode || !targetNode) return null
-      
-      // Find output port position on source node
-      const sourcePortIndex = sourceNode.outputs.findIndex(p => p === connection.sourceHandle)
-      const sourcePortY = 80 + (sourcePortIndex * 20)
-      
-      // Find input port position on target node
-      const targetPortIndex = targetNode.inputs.findIndex(p => p === connection.targetHandle)
-      const targetPortY = 40 + (targetPortIndex * 20)
-      
-      const sourceX = sourceNode.position.x + 200
-      const sourceY = sourceNode.position.y + sourcePortY
-      const targetX = targetNode.position.x
-      const targetY = targetNode.position.y + targetPortY
-      
-      // Calculate control points for the bezier curve
-      const controlPointOffset = 50
-      const sourceControlX = sourceX + controlPointOffset
-      const targetControlX = targetX - controlPointOffset
-      
-      return (
-        <svg
-          key={connection.id}
-          className="absolute top-0 left-0 w-full h-full pointer-events-none"
-          style={{ zIndex: 0 }}
-        >
+    return (
+      <svg
+        className="absolute top-0 left-0 w-full h-full pointer-events-none"
+        style={{ zIndex: 0 }}
+      >
+        {connections.map(connection => {
+          const sourceNode = nodes.find(n => n.id === connection.source)
+          const targetNode = nodes.find(n => n.id === connection.target)
+          
+          if (!sourceNode || !targetNode) return null
+          
+          // Get port positions
+          const sourcePort = getPortPosition(sourceNode, connection.sourceHandle, false)
+          const targetPort = getPortPosition(targetNode, connection.targetHandle, true)
+          
+          const sourceX = sourcePort.x
+          const sourceY = sourcePort.y
+          const targetX = targetPort.x
+          const targetY = targetPort.y
+          
+          // Calculate control points for the bezier curve
+          const controlPointOffset = Math.min(80, Math.abs(targetX - sourceX) / 2)
+          const sourceControlX = sourceX + controlPointOffset
+          const targetControlX = targetX - controlPointOffset
+          
+          // Calculate path for the connector
+          const path = `M ${sourceX} ${sourceY} C ${sourceControlX} ${sourceY}, ${targetControlX} ${targetY}, ${targetX} ${targetY}`
+          
+          // Get midpoint for label
+          const midPoint = getPointOnCurve(sourceX, sourceY, targetX, targetY, 0.5)
+          
+          // Check if this connection is selected
+          const isSelected = selectedConnection?.id === connection.id
+          
+          return (
+            <g 
+              key={connection.id} 
+              onClick={(e) => handleConnectionClick(e, connection.id)}
+              className="cursor-pointer"
+              style={{ pointerEvents: 'all' }}
+            >
+              {/* Invisible wider path for easier selection */}
+              <path
+                d={path}
+                stroke="transparent"
+                strokeWidth="10"
+                fill="none"
+              />
+              
+              {/* Visible path */}
+              <path
+                d={path}
+                stroke={isSelected ? '#ffffff' : 'currentColor'}
+                strokeWidth={isSelected ? '3' : '2'}
+                fill="none"
+                className={isSelected ? 'text-primary-light' : 'text-primary'}
+              />
+              
+              {/* Source and target dots */}
+              <circle cx={sourceX} cy={sourceY} r="3" fill="currentColor" className="text-primary" />
+              <circle cx={targetX} cy={targetY} r="3" fill="currentColor" className="text-primary" />
+              
+              {/* Connection label */}
+              {connection.label && (
+                <foreignObject
+                  x={midPoint.x - 60}
+                  y={midPoint.y - 15}
+                  width="120"
+                  height="30"
+                  style={{ pointerEvents: 'none' }}
+                >
+                  <div className="flex items-center justify-center h-full">
+                    <div className={`connection-label ${isSelected ? 'ring-2 ring-primary' : ''}`}>
+                      {connection.label}
+                    </div>
+                  </div>
+                </foreignObject>
+              )}
+            </g>
+          )
+        })}
+        
+        {/* Render temporary connection while drawing */}
+        {isAddingConnection && temporaryConnection && (
           <path
-            d={`M ${sourceX} ${sourceY} C ${sourceControlX} ${sourceY}, ${targetControlX} ${targetY}, ${targetX} ${targetY}`}
+            d={`M ${temporaryConnection.sourceX} ${temporaryConnection.sourceY} C ${temporaryConnection.sourceX + 50} ${temporaryConnection.sourceY}, ${temporaryConnection.targetX - 50} ${temporaryConnection.targetY}, ${temporaryConnection.targetX} ${temporaryConnection.targetY}`}
             stroke="currentColor"
             strokeWidth="2"
+            strokeDasharray="5,5"
             fill="none"
             className="text-primary"
           />
-          <circle cx={sourceX} cy={sourceY} r="3" fill="currentColor" className="text-primary" />
-          <circle cx={targetX} cy={targetY} r="3" fill="currentColor" className="text-primary" />
-        </svg>
-      )
-    })
+        )}
+      </svg>
+    )
   }
   
   // Properties panel for selected node
   const renderPropertiesPanel = () => {
+    if (selectedConnection) {
+      return (
+        <div className="p-4">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-white">
+              <ArrowRight size={16} />
+            </div>
+            <h3 className="font-medium">Connection Properties</h3>
+          </div>
+          
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                Connection Label
+              </label>
+              <input
+                type="text"
+                value={selectedConnection.label || ''}
+                onChange={(e) => {
+                  const newLabel = e.target.value
+                  setConnections(prev => prev.map(conn => {
+                    if (conn.id === selectedConnection.id) {
+                      return { ...conn, label: newLabel }
+                    }
+                    return conn
+                  }))
+                  setSelectedConnection(prev => ({ ...prev, label: newLabel }))
+                }}
+                className="input text-sm"
+              />
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                From
+              </label>
+              <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700">
+                {selectedConnection.source} ({selectedConnection.sourceHandle})
+              </div>
+            </div>
+            
+            <div className="space-y-1">
+              <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
+                To
+              </label>
+              <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700">
+                {selectedConnection.target} ({selectedConnection.targetHandle})
+              </div>
+            </div>
+          </div>
+          
+          <div className="mt-6 flex justify-between">
+            <button
+              onClick={deleteSelectedConnection}
+              className="btn btn-outline text-sm inline-flex items-center gap-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+            >
+              <Trash2 size={16} />
+              Delete
+            </button>
+            
+            <button
+              onClick={() => setSelectedConnection(null)}
+              className="btn btn-outline text-sm"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )
+    }
+    
     if (!selectedNode) {
       return (
         <div className="p-4 text-center text-surface-500">
-          <p>Select a node to edit its properties</p>
+          <p>Select a node or connection to edit properties</p>
         </div>
       )
     }
@@ -735,6 +1004,7 @@ const MainFeature = () => {
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
+          onClick={handleCanvasClick}
         >
           <div
             className="relative w-full h-full"
