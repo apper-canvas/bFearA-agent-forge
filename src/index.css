@@ -90,7 +90,7 @@
   }
 
   .port-hover {
-    @apply bg-primary border-white dark:border-surface-800 shadow-md;
+    @apply bg-primary border-white dark:border-surface-800 shadow-md transform scale-110;
   }
 
   .port-active {
@@ -106,7 +106,7 @@
   }
 
   .port-highlighted {
-    @apply ring-2 ring-primary ring-offset-1 ring-offset-white dark:ring-offset-surface-800;
+    @apply ring-2 ring-primary ring-offset-1 ring-offset-white dark:ring-offset-surface-800 scale-125;
   }
 
   .connection-path {

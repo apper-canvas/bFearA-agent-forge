@@ -25,6 +25,8 @@ const MainFeature = () => {
   const [temporaryConnection, setTemporaryConnection] = useState(null)
   const [hoveredPort, setHoveredPort] = useState(null)
   const [validTargetPorts, setValidTargetPorts] = useState([])
+  const [isDraggingComponent, setIsDraggingComponent] = useState(false)
+  const [draggedComponentType, setDraggedComponentType] = useState(null)
   
   const canvasRef = useRef(null)
   
@@ -34,7 +36,7 @@ const MainFeature = () => {
       type: 'agent',
       label: 'AI Agent',
       icon: <Cpu size={18} />,
-      color: 'bg-blue-500',
+      color: 'bg-gradient-to-br from-blue-400 to-blue-600',
       inputs: ['memory', 'tools', 'retriever'],
       outputs: ['response'],
       properties: [
@@ -52,7 +54,7 @@ const MainFeature = () => {
       type: 'memory',
       label: 'Memory',
       icon: <Brain size={18} />,
-      color: 'bg-purple-500',
+      color: 'bg-gradient-to-br from-purple-400 to-purple-600',
       inputs: [],
       outputs: ['context'],
       properties: [
@@ -65,7 +67,7 @@ const MainFeature = () => {
       type: 'retriever',
       label: 'Retriever',
       icon: <Database size={18} />,
-      color: 'bg-green-500',
+      color: 'bg-gradient-to-br from-green-400 to-green-600',
       inputs: ['query'],
       outputs: ['documents'],
       properties: [
@@ -78,7 +80,7 @@ const MainFeature = () => {
       type: 'documentLoader',
       label: 'Document Loader',
       icon: <FileText size={18} />,
-      color: 'bg-yellow-500',
+      color: 'bg-gradient-to-br from-yellow-400 to-yellow-600',
       inputs: [],
       outputs: ['documents'],
       properties: [
@@ -92,7 +94,7 @@ const MainFeature = () => {
       type: 'vectorStore',
       label: 'Vector Store',
       icon: <Database size={18} />,
-      color: 'bg-red-500',
+      color: 'bg-gradient-to-br from-red-400 to-red-600',
       inputs: ['documents'],
       outputs: ['vectors'],
       properties: [
@@ -105,7 +107,7 @@ const MainFeature = () => {
       type: 'outputTransformer',
       label: 'Output Transformer',
       icon: <Zap size={18} />,
-      color: 'bg-indigo-500',
+      color: 'bg-gradient-to-br from-indigo-400 to-indigo-600',
       inputs: ['input'],
       outputs: ['output'],
       properties: [
@@ -119,7 +121,7 @@ const MainFeature = () => {
       type: 'tool',
       label: 'Tool',
       icon: <Workflow size={18} />,
-      color: 'bg-teal-500',
+      color: 'bg-gradient-to-br from-teal-400 to-teal-600',
       inputs: ['parameters'],
       outputs: ['result'],
       properties: [
@@ -395,18 +397,53 @@ const MainFeature = () => {
     // If we couldn't find a good position, offset from the initial position
     return { x: startX + 300, y: startY + 200 }
   }
+
+  // Handle drag start for component from the palette
+  const handleDragStart = (e, type) => {
+    setIsDraggingComponent(true)
+    setDraggedComponentType(type)
+    e.dataTransfer.setData('text/plain', type)
+    // Create a custom drag image
+    const dragPreview = document.createElement('div')
+    const nodeType = nodeTypes.find(nt => nt.type === type)
+    dragPreview.className = `${nodeType.color} rounded-lg p-3 text-white shadow-lg opacity-80 flex items-center gap-2 w-[200px]`
+    dragPreview.innerHTML = `<div>${nodeType.icon.type.render()}</div><span class="font-medium">${nodeType.label}</span>`
+    document.body.appendChild(dragPreview)
+    e.dataTransfer.setDragImage(dragPreview, 100, 30)
+    setTimeout(() => document.body.removeChild(dragPreview), 0)
+  }
+
+  const handleDragEnd = () => {
+    setIsDraggingComponent(false)
+    setDraggedComponentType(null)
+  }
   
-  // Add node to canvas with automatic positioning
-  const addNode = (type) => {
+  // Handle drop on canvas
+  const handleDrop = (e) => {
+    e.preventDefault()
+    const type = e.dataTransfer.getData('text/plain')
+    if (!type) return
+    
+    const canvasRect = canvasRef.current.getBoundingClientRect()
+    const dropX = (e.clientX - canvasRect.left - position.x) / scale
+    const dropY = (e.clientY - canvasRect.top - position.y) / scale
+    
+    // Create the node at the drop position
+    addNodeAt(type, dropX, dropY)
+  }
+  
+  const handleDragOver = (e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+  }
+  
+  // Add node to canvas at specific position
+  const addNodeAt = (type, x, y) => {
     const nodeType = nodeTypes.find(nt => nt.type === type)
     if (!nodeType) return
     
-    // Calculate initial position (center of viewport)
-    const initialX = -position.x / scale + (canvasRef.current?.clientWidth / 2 / scale) - 100
-    const initialY = -position.y / scale + (canvasRef.current?.clientHeight / 2 / scale) - 75
-    
     // Find a suitable position that doesn't overlap with existing nodes
-    const finalPosition = findSuitablePosition(initialX, initialY)
+    const finalPosition = findSuitablePosition(x - 100, y - 75)
     
     const newNode = {
       id: `node-${Date.now()}`,
@@ -426,6 +463,18 @@ const MainFeature = () => {
     
     setNodes(prev => [...prev, newNode])
     setSelectedNode(newNode)
+  }
+  
+  // Add node to canvas with automatic positioning (used by quick add)
+  const addNode = (type) => {
+    const nodeType = nodeTypes.find(nt => nt.type === type)
+    if (!nodeType) return
+    
+    // Calculate initial position (center of viewport)
+    const initialX = -position.x / scale + (canvasRef.current?.clientWidth / 2 / scale) - 100
+    const initialY = -position.y / scale + (canvasRef.current?.clientHeight / 2 / scale) - 75
+    
+    addNodeAt(type, initialX, initialY)
   }
   
   // Handle node drag
@@ -776,15 +825,30 @@ const MainFeature = () => {
     // If there are multiple connections, stagger their control points vertically
     let verticalOffset = 0
     if (totalConnections > 1) {
-      // Distribute connections vertically
-      verticalOffset = (connectionIndex - (totalConnections - 1) / 2) * 30
+      // Distribute connections vertically with more space
+      verticalOffset = (connectionIndex - (totalConnections - 1) / 2) * 40
     }
     
-    return {
-      cp1x: sourceX + baseOffset,
-      cp1y: sourceY + verticalOffset,
-      cp2x: targetX - baseOffset,
-      cp2y: targetY + verticalOffset
+    // Add a horizontal offset based on connection index to further separate paths
+    const horizontalOffset = connectionIndex * 10
+
+    // Adjust the curve based on whether source is to the left or right of target
+    if (sourceX < targetX) {
+      // Left to right connection
+      return {
+        cp1x: sourceX + baseOffset + horizontalOffset,
+        cp1y: sourceY + verticalOffset,
+        cp2x: targetX - baseOffset - horizontalOffset,
+        cp2y: targetY + verticalOffset
+      }
+    } else {
+      // Right to left connection (needs a higher curve)
+      return {
+        cp1x: sourceX - baseOffset + horizontalOffset,
+        cp1y: sourceY - 50 - verticalOffset,
+        cp2x: targetX + baseOffset - horizontalOffset,
+        cp2y: targetY - 50 - verticalOffset
+      }
     }
   }
   
@@ -798,8 +862,8 @@ const MainFeature = () => {
     return (
       <div
         key={node.id}
-        className={`absolute ${node.color} rounded-lg shadow-lg overflow-hidden transition-shadow ${
-          isSelected ? 'ring-2 ring-white dark:ring-surface-900 shadow-xl' : ''
+        className={`absolute ${node.color} rounded-lg shadow-lg overflow-hidden transition-shadow cursor-move ${
+          isSelected ? 'ring-2 ring-white dark:ring-surface-900 shadow-xl scale-[1.02]' : ''
         }`}
         style={{
           left: node.position.x,
@@ -846,9 +910,9 @@ const MainFeature = () => {
                   <div 
                     className={`port port-input
                       ${isHovered ? 'port-hover' : ''}
-                      ${isValidTarget ? 'port-valid' : ''}
-                      ${isConnected ? 'port-connected' : ''}
-                      ${hasMemory ? 'port-memory-connected' : ''}
+                      ${isValidTarget ? 'port-valid port-highlighted' : ''}
+                      ${isConnected ? 'bg-primary-light border-white dark:border-surface-800' : ''}
+                      ${hasMemory ? 'bg-purple-500 border-white dark:border-surface-800' : ''}
                       ${isAddingConnection && connectingFrom ? 'animate-pulse' : ''}
                     `}
                     data-node-id={node.id}
@@ -891,7 +955,7 @@ const MainFeature = () => {
                     className={`port port-output
                       ${isHovered ? 'port-hover' : ''}
                       ${isConnecting ? 'port-active' : ''}
-                      ${isConnected ? 'port-connected' : ''}
+                      ${isConnected ? 'bg-primary-light border-white dark:border-surface-800' : ''}
                     `}
                     data-node-id={node.id}
                     data-port-id={output}
@@ -969,6 +1033,9 @@ const MainFeature = () => {
                                      targetNode.type === 'agent' && 
                                      connection.targetHandle === 'memory'
             
+            // Apply gradient to connection
+            const gradientId = `gradient-${connection.id}`
+            
             return (
               <g 
                 key={connection.id} 
@@ -976,6 +1043,23 @@ const MainFeature = () => {
                 className="cursor-pointer"
                 style={{ pointerEvents: 'all' }}
               >
+                {/* Define gradient for this connection */}
+                <defs>
+                  <linearGradient id={gradientId} x1="0%" y1="0%" x2="100%" y2="0%">
+                    {isMemoryConnection ? (
+                      <>
+                        <stop offset="0%" stopColor="#a855f7" />
+                        <stop offset="100%" stopColor="#8b5cf6" />
+                      </>
+                    ) : (
+                      <>
+                        <stop offset="0%" stopColor="#3b82f6" />
+                        <stop offset="100%" stopColor="#2563eb" />
+                      </>
+                    )}
+                  </linearGradient>
+                </defs>
+                
                 {/* Invisible wider path for easier selection */}
                 <path
                   d={path}
@@ -987,15 +1071,13 @@ const MainFeature = () => {
                 {/* Visible path */}
                 <path
                   d={path}
-                  stroke={isSelected ? '#ffffff' : isMemoryConnection ? '#a855f7' : 'currentColor'}
+                  stroke={isSelected ? '#ffffff' : `url(#${gradientId})`}
                   strokeWidth={isSelected ? '3' : '2'}
                   fill="none"
                   className={`connection-path ${
                     isSelected 
-                      ? 'text-primary-light' 
-                      : isMemoryConnection 
-                        ? 'text-purple-500' 
-                        : 'text-primary'
+                      ? 'text-primary-light filter drop-shadow-lg' 
+                      : ''
                   }`}
                 />
                 
@@ -1004,15 +1086,13 @@ const MainFeature = () => {
                   cx={sourceX} 
                   cy={sourceY} 
                   r="4" 
-                  fill={isMemoryConnection ? '#a855f7' : 'currentColor'} 
-                  className={isMemoryConnection ? 'text-purple-500' : 'text-primary'} 
+                  fill={isMemoryConnection ? '#a855f7' : '#3b82f6'} 
                 />
                 <circle 
                   cx={targetX} 
                   cy={targetY} 
                   r="4" 
-                  fill={isMemoryConnection ? '#a855f7' : 'currentColor'} 
-                  className={isMemoryConnection ? 'text-purple-500' : 'text-primary'} 
+                  fill={isMemoryConnection ? '#8b5cf6' : '#2563eb'} 
                 />
                 
                 {/* Connection label */}
@@ -1027,7 +1107,7 @@ const MainFeature = () => {
                     <div className="flex items-center justify-center h-full">
                       <div className={`connection-label ${
                         isSelected 
-                          ? 'ring-2 ring-primary' 
+                          ? 'ring-2 ring-primary shadow-md' 
                           : isMemoryConnection 
                             ? 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400' 
                             : ''
@@ -1045,27 +1125,32 @@ const MainFeature = () => {
         {/* Render temporary connection while drawing */}
         {isAddingConnection && temporaryConnection && (
           <g>
+            <defs>
+              <linearGradient id="temp-gradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stopColor="#3b82f6" />
+                <stop offset="100%" stopColor="#60a5fa" />
+              </linearGradient>
+            </defs>
             <path
               d={`M ${temporaryConnection.sourceX} ${temporaryConnection.sourceY} C ${temporaryConnection.sourceX + 100} ${temporaryConnection.sourceY}, ${temporaryConnection.targetX - 100} ${temporaryConnection.targetY}, ${temporaryConnection.targetX} ${temporaryConnection.targetY}`}
-              stroke="currentColor"
+              stroke="url(#temp-gradient)"
               strokeWidth="2"
               strokeDasharray="5,5"
               fill="none"
-              className="text-primary connection-line-creating"
+              className="connection-line-creating"
             />
             <circle 
               cx={temporaryConnection.sourceX} 
               cy={temporaryConnection.sourceY} 
               r="4" 
-              fill="currentColor" 
-              className="text-primary" 
+              fill="#3b82f6"
             />
             <circle 
               cx={temporaryConnection.targetX} 
               cy={temporaryConnection.targetY} 
               r="4" 
-              fill="currentColor" 
-              className="text-primary animate-ping" 
+              fill="#60a5fa"
+              className="animate-ping" 
             />
           </g>
         )}
@@ -1078,7 +1163,7 @@ const MainFeature = () => {
                 key={idx}
                 cx={port.position.x}
                 cy={port.position.y}
-                r="6"
+                r="8"
                 className="fill-none stroke-green-500 stroke-2 animate-pulse"
               />
             ))}
@@ -1098,7 +1183,7 @@ const MainFeature = () => {
       return (
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
-            <div className="w-6 h-6 rounded-md bg-primary flex items-center justify-center text-white">
+            <div className="w-6 h-6 rounded-md bg-gradient-to-br from-primary to-primary-dark flex items-center justify-center text-white">
               <ArrowRight size={16} />
             </div>
             <h3 className="font-medium">Connection Properties</h3>
@@ -1340,8 +1425,11 @@ const MainFeature = () => {
                   key={nodeType.type}
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
-                  className={`${nodeType.color} rounded-lg p-3 text-white cursor-pointer shadow-sm hover:shadow`}
+                  className={`${nodeType.color} rounded-lg p-3 text-white cursor-grab shadow-sm hover:shadow-md transition-all duration-200`}
                   onClick={() => addNode(nodeType.type)}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, nodeType.type)}
+                  onDragEnd={handleDragEnd}
                 >
                   <div className="flex items-center gap-2">
                     {nodeType.icon}
@@ -1426,6 +1514,8 @@ const MainFeature = () => {
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseUp}
           onClick={handleCanvasClick}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
         >
           <div
             className="relative w-full h-full"
@@ -1445,6 +1535,15 @@ const MainFeature = () => {
                 backgroundSize: '20px 20px'
               }}
             />
+            
+            {/* Drop zone indicator when dragging a component */}
+            {isDraggingComponent && (
+              <div className="absolute inset-0 border-2 border-dashed border-primary-light bg-primary-light bg-opacity-5 rounded-lg pointer-events-none">
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-primary text-opacity-70 font-medium">
+                  Drop to add {draggedComponentType && nodeTypes.find(nt => nt.type === draggedComponentType)?.label}
+                </div>
+              </div>
+            )}
             
             {/* Connections */}
             {renderConnections()}
