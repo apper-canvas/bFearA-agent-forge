@@ -231,10 +231,23 @@ const MainFeature = () => {
     }
   }
 
+  // Check if an agent node already has a memory node connected to it
+  const hasMemoryConnected = (agentNodeId) => {
+    return connections.some(
+      conn => conn.target === agentNodeId && 
+      conn.targetHandle === 'memory' && 
+      nodes.find(n => n.id === conn.source)?.type === 'memory'
+    )
+  }
+
   // Find valid target ports based on mouse position
   const findValidTargetPorts = (x, y) => {
     if (!connectingFrom) return
     
+    // Get the source node
+    const sourceNode = nodes.find(n => n.id === connectingFrom.nodeId)
+    if (!sourceNode) return
+
     // Find possible target nodes (exclude the source node)
     const targetNodes = nodes.filter(node => node.id !== connectingFrom.nodeId)
     const validPorts = []
@@ -242,6 +255,11 @@ const MainFeature = () => {
     targetNodes.forEach(node => {
       if (node.inputs && node.inputs.length) {
         node.inputs.forEach(input => {
+          // Skip if we're connecting from a Memory node to an Agent node's memory port that already has a memory connection
+          if (sourceNode.type === 'memory' && node.type === 'agent' && input === 'memory' && hasMemoryConnected(node.id)) {
+            return
+          }
+
           // Check if there's already a connection to this input
           const alreadyConnected = connections.some(
             conn => conn.target === node.id && conn.targetHandle === input
@@ -269,6 +287,16 @@ const MainFeature = () => {
     const targetNode = nodes.find(n => n.id === targetNodeId)
     
     if (sourceNode && targetNode) {
+      // Check if we're connecting a Memory node to an Agent's memory port that already has a connection
+      if (sourceNode.type === 'memory' && targetNode.type === 'agent' && targetPortId === 'memory') {
+        // Check if the agent already has a memory connection
+        if (hasMemoryConnected(targetNodeId)) {
+          alert('Agent can only have one Memory connected.')
+          cancelConnection()
+          return
+        }
+      }
+
       const sourcePort = connectingFrom.portId
       const targetPort = targetPortId
       
@@ -306,19 +334,85 @@ const MainFeature = () => {
     setValidTargetPorts([])
   }
   
-  // Add node to canvas
+  // Check for node overlap
+  const isNodeOverlapping = (position, nodeWidth = 200, nodeHeight = 150) => {
+    const padding = 20 // Minimum distance between nodes
+    
+    return nodes.some(node => {
+      return (
+        position.x < node.position.x + nodeWidth + padding &&
+        position.x + nodeWidth + padding > node.position.x &&
+        position.y < node.position.y + nodeHeight + padding &&
+        position.y + nodeHeight + padding > node.position.y
+      )
+    })
+  }
+
+  // Find a suitable position for a new node
+  const findSuitablePosition = (startX, startY, nodeWidth = 200, nodeHeight = 150) => {
+    // Try the initial position first
+    const initialPosition = { x: startX, y: startY }
+    if (!isNodeOverlapping(initialPosition, nodeWidth, nodeHeight)) {
+      return initialPosition
+    }
+    
+    // Define a spiral pattern to check positions
+    const directions = [
+      { dx: 1, dy: 0 },  // right
+      { dx: 0, dy: 1 },  // down
+      { dx: -1, dy: 0 }, // left
+      { dx: 0, dy: -1 }  // up
+    ]
+    
+    const spacing = nodeWidth + 40 // Space between nodes
+    let x = startX
+    let y = startY
+    let direction = 0
+    let stepsInThisDirection = 1
+    let stepsTaken = 0
+    let segmentLength = 1
+    
+    // Try positions in a spiral pattern until we find a non-overlapping one
+    for (let i = 0; i < 100; i++) { // Limit to 100 attempts
+      x += directions[direction].dx * spacing
+      y += directions[direction].dy * spacing
+      
+      stepsTaken++
+      if (stepsTaken === segmentLength) {
+        direction = (direction + 1) % 4
+        stepsTaken = 0
+        if (direction === 0 || direction === 2) {
+          segmentLength++
+        }
+      }
+      
+      const position = { x, y }
+      if (!isNodeOverlapping(position, nodeWidth, nodeHeight)) {
+        return position
+      }
+    }
+    
+    // If we couldn't find a good position, offset from the initial position
+    return { x: startX + 300, y: startY + 200 }
+  }
+  
+  // Add node to canvas with automatic positioning
   const addNode = (type) => {
     const nodeType = nodeTypes.find(nt => nt.type === type)
     if (!nodeType) return
+    
+    // Calculate initial position (center of viewport)
+    const initialX = -position.x / scale + (canvasRef.current?.clientWidth / 2 / scale) - 100
+    const initialY = -position.y / scale + (canvasRef.current?.clientHeight / 2 / scale) - 75
+    
+    // Find a suitable position that doesn't overlap with existing nodes
+    const finalPosition = findSuitablePosition(initialX, initialY)
     
     const newNode = {
       id: `node-${Date.now()}`,
       type: nodeType.type,
       label: nodeType.label,
-      position: {
-        x: -position.x / scale + (canvasRef.current?.clientWidth / 2 / scale) - 100,
-        y: -position.y / scale + (canvasRef.current?.clientHeight / 2 / scale) - 75
-      },
+      position: finalPosition,
       data: {
         ...nodeType.properties.reduce((acc, prop) => {
           acc[prop.name] = prop.default
@@ -393,6 +487,15 @@ const MainFeature = () => {
     const y = node.position.y + portY
     
     return { x, y }
+  }
+  
+  // Check if a port is connected
+  const isPortConnected = (nodeId, portId, isInput) => {
+    if (isInput) {
+      return connections.some(conn => conn.target === nodeId && conn.targetHandle === portId)
+    } else {
+      return connections.some(conn => conn.source === nodeId && conn.sourceHandle === portId)
+    }
   }
   
   // Calculate point on bezier curve
@@ -540,26 +643,78 @@ const MainFeature = () => {
     }))
   }
   
-  // Auto layout nodes
+  // Auto layout nodes with improved positioning
   const autoLayoutNodes = () => {
     if (nodes.length === 0) return
     
-    // Simple grid layout
-    const columns = Math.ceil(Math.sqrt(nodes.length))
+    // Initialize grid positions
     const nodeWidth = 200
     const nodeHeight = 150
     const padding = 50
     
-    const newNodes = nodes.map((node, index) => {
-      const col = index % columns
-      const row = Math.floor(index / columns)
+    // First pass: create a more intelligent layout
+    const newNodes = [...nodes]
+    const positioned = new Set()
+    
+    // Start with any agent nodes
+    const agentNodes = newNodes.filter(node => node.type === 'agent')
+    const nonAgentNodes = newNodes.filter(node => node.type !== 'agent')
+    
+    // Position agent nodes first in a row
+    agentNodes.forEach((node, index) => {
+      node.position = {
+        x: index * (nodeWidth + padding),
+        y: 0
+      }
+      positioned.add(node.id)
+    })
+    
+    // Find nodes connected to each agent and position them
+    const findConnectedNodes = (nodeId, direction) => {
+      // direction: 1 = inputs (above), -1 = outputs (below)
+      const connectedNodeIds = connections
+        .filter(conn => direction > 0 ? conn.target === nodeId : conn.source === nodeId)
+        .map(conn => direction > 0 ? conn.source : conn.target)
       
-      return {
-        ...node,
-        position: {
-          x: col * (nodeWidth + padding),
-          y: row * (nodeHeight + padding)
+      return nonAgentNodes.filter(node => 
+        connectedNodeIds.includes(node.id) && !positioned.has(node.id)
+      )
+    }
+    
+    // Position connected nodes
+    agentNodes.forEach((agentNode, agentIndex) => {
+      // Position input nodes above the agent
+      const inputNodes = findConnectedNodes(agentNode.id, 1)
+      inputNodes.forEach((node, index) => {
+        node.position = {
+          x: agentNode.position.x + (index - inputNodes.length/2) * (nodeWidth + padding/2),
+          y: agentNode.position.y - (nodeHeight + padding)
         }
+        positioned.add(node.id)
+      })
+      
+      // Position output nodes below the agent
+      const outputNodes = findConnectedNodes(agentNode.id, -1)
+      outputNodes.forEach((node, index) => {
+        node.position = {
+          x: agentNode.position.x + (index - outputNodes.length/2) * (nodeWidth + padding/2),
+          y: agentNode.position.y + (nodeHeight + padding)
+        }
+        positioned.add(node.id)
+      })
+    })
+    
+    // Position any remaining nodes in a grid
+    const remainingNodes = nonAgentNodes.filter(node => !positioned.has(node.id))
+    const columns = Math.ceil(Math.sqrt(remainingNodes.length))
+    
+    remainingNodes.forEach((node, index) => {
+      const col = index % columns
+      const row = Math.floor(index / columns) + 3 // Start below the agent node chains
+      
+      node.position = {
+        x: col * (nodeWidth + padding),
+        y: row * (nodeHeight + padding)
       }
     })
     
@@ -612,6 +767,26 @@ const MainFeature = () => {
       port => port.nodeId === nodeId && port.portId === portId
     )
   }
+
+  // Calculate optimized control points to reduce connection overlaps
+  const getOptimizedControlPoints = (sourceX, sourceY, targetX, targetY, connectionIndex, totalConnections) => {
+    const dx = Math.abs(targetX - sourceX)
+    let baseOffset = Math.min(Math.max(80, dx / 2), 150)
+    
+    // If there are multiple connections, stagger their control points vertically
+    let verticalOffset = 0
+    if (totalConnections > 1) {
+      // Distribute connections vertically
+      verticalOffset = (connectionIndex - (totalConnections - 1) / 2) * 30
+    }
+    
+    return {
+      cp1x: sourceX + baseOffset,
+      cp1y: sourceY + verticalOffset,
+      cp2x: targetX - baseOffset,
+      cp2y: targetY + verticalOffset
+    }
+  }
   
   // Render node on canvas
   const renderNode = (node) => {
@@ -660,6 +835,11 @@ const MainFeature = () => {
               const isValidTarget = isAddingConnection && isPortValid(node.id, input)
               const isHovered = hoveredPort && hoveredPort.nodeId === node.id && 
                             hoveredPort.portId === input && hoveredPort.isInput
+              const isConnected = isPortConnected(node.id, input, true)
+              
+              // Check if this is a memory port on an agent node
+              const isMemoryPortOnAgent = node.type === 'agent' && input === 'memory'
+              const hasMemory = isMemoryPortOnAgent && hasMemoryConnected(node.id)
               
               return (
                 <div key={input} className="flex items-center gap-2 mb-2 relative">
@@ -667,6 +847,8 @@ const MainFeature = () => {
                     className={`port port-input
                       ${isHovered ? 'port-hover' : ''}
                       ${isValidTarget ? 'port-valid' : ''}
+                      ${isConnected ? 'port-connected' : ''}
+                      ${hasMemory ? 'port-memory-connected' : ''}
                       ${isAddingConnection && connectingFrom ? 'animate-pulse' : ''}
                     `}
                     data-node-id={node.id}
@@ -676,7 +858,12 @@ const MainFeature = () => {
                     onMouseLeave={handlePortMouseLeave}
                     onMouseDown={(e) => handlePortMouseDown(e, node.id, input, true)}
                   />
-                  <span className="text-xs text-surface-600 dark:text-surface-400">{input}</span>
+                  <span className="text-xs text-surface-600 dark:text-surface-400">
+                    {input}
+                    {isMemoryPortOnAgent && hasMemory && (
+                      <span className="ml-1 text-green-500 font-bold">●</span>
+                    )}
+                  </span>
                 </div>
               )
             })}
@@ -690,14 +877,21 @@ const MainFeature = () => {
                                 connectingFrom.portId === output
               const isHovered = hoveredPort && hoveredPort.nodeId === node.id && 
                             hoveredPort.portId === output && !hoveredPort.isInput
+              const isConnected = isPortConnected(node.id, output, false)
               
               return (
                 <div key={output} className="flex items-center justify-end gap-2 mb-2 relative">
-                  <span className="text-xs text-surface-600 dark:text-surface-400">{output}</span>
+                  <span className="text-xs text-surface-600 dark:text-surface-400">
+                    {output}
+                    {isConnected && (
+                      <span className="ml-1 text-green-500 font-bold">●</span>
+                    )}
+                  </span>
                   <div 
                     className={`port port-output
                       ${isHovered ? 'port-hover' : ''}
                       ${isConnecting ? 'port-active' : ''}
+                      ${isConnected ? 'port-connected' : ''}
                     `}
                     data-node-id={node.id}
                     data-port-id={output}
@@ -715,89 +909,137 @@ const MainFeature = () => {
     )
   }
   
+  // Group connections by source-target pairs to avoid overlaps
+  const groupConnections = () => {
+    const connectionGroups = {}
+    
+    connections.forEach(connection => {
+      const key = `${connection.source}-${connection.target}`
+      if (!connectionGroups[key]) {
+        connectionGroups[key] = []
+      }
+      connectionGroups[key].push(connection)
+    })
+    
+    return connectionGroups
+  }
+  
   // Render connections between nodes
   const renderConnections = () => {
+    // Group connections by source-target pair to avoid overlaps
+    const connectionGroups = groupConnections()
+    
     return (
       <svg
         className="absolute top-0 left-0 w-full h-full pointer-events-none"
         style={{ zIndex: 0 }}
       >
-        {connections.map(connection => {
-          const sourceNode = nodes.find(n => n.id === connection.source)
-          const targetNode = nodes.find(n => n.id === connection.target)
-          
-          if (!sourceNode || !targetNode) return null
-          
-          // Get port positions
-          const sourcePort = getPortPosition(sourceNode, connection.sourceHandle, false)
-          const targetPort = getPortPosition(targetNode, connection.targetHandle, true)
-          
-          const sourceX = sourcePort.x
-          const sourceY = sourcePort.y
-          const targetX = targetPort.x
-          const targetY = targetPort.y
-          
-          // Calculate control points for the bezier curve
-          const dx = Math.abs(targetX - sourceX)
-          const controlPointOffset = Math.min(Math.max(80, dx / 2), 150)
-          const sourceControlX = sourceX + controlPointOffset
-          const targetControlX = targetX - controlPointOffset
-          
-          // Calculate path for the connector
-          const path = `M ${sourceX} ${sourceY} C ${sourceControlX} ${sourceY}, ${targetControlX} ${targetY}, ${targetX} ${targetY}`
-          
-          // Get midpoint for label
-          const midPoint = getPointOnCurve(sourceX, sourceY, targetX, targetY, 0.5)
-          
-          // Check if this connection is selected
-          const isSelected = selectedConnection?.id === connection.id
-          
-          return (
-            <g 
-              key={connection.id} 
-              onClick={(e) => handleConnectionClick(e, connection.id)}
-              className="cursor-pointer"
-              style={{ pointerEvents: 'all' }}
-            >
-              {/* Invisible wider path for easier selection */}
-              <path
-                d={path}
-                stroke="transparent"
-                strokeWidth="15" // Wider hit area for easier selection
-                fill="none"
-              />
-              
-              {/* Visible path */}
-              <path
-                d={path}
-                stroke={isSelected ? '#ffffff' : 'currentColor'}
-                strokeWidth={isSelected ? '3' : '2'}
-                fill="none"
-                className={`connection-path ${isSelected ? 'text-primary-light' : 'text-primary'}`}
-              />
-              
-              {/* Source and target dots */}
-              <circle cx={sourceX} cy={sourceY} r="4" fill="currentColor" className="text-primary" />
-              <circle cx={targetX} cy={targetY} r="4" fill="currentColor" className="text-primary" />
-              
-              {/* Connection label */}
-              {connection.label && (
-                <foreignObject
-                  x={midPoint.x - 60}
-                  y={midPoint.y - 15}
-                  width="120"
-                  height="30"
-                  style={{ pointerEvents: 'none' }}
-                >
-                  <div className="flex items-center justify-center h-full">
-                    <div className={`connection-label ${isSelected ? 'ring-2 ring-primary' : ''}`}>
-                      {connection.label}
+        {Object.values(connectionGroups).map((connectionGroup, groupIndex) => {
+          return connectionGroup.map((connection, connectionIndex) => {
+            const sourceNode = nodes.find(n => n.id === connection.source)
+            const targetNode = nodes.find(n => n.id === connection.target)
+            
+            if (!sourceNode || !targetNode) return null
+            
+            // Get port positions
+            const sourcePort = getPortPosition(sourceNode, connection.sourceHandle, false)
+            const targetPort = getPortPosition(targetNode, connection.targetHandle, true)
+            
+            const sourceX = sourcePort.x
+            const sourceY = sourcePort.y
+            const targetX = targetPort.x
+            const targetY = targetPort.y
+            
+            // Calculate optimized control points for the bezier curve to prevent overlaps
+            const { cp1x, cp1y, cp2x, cp2y } = getOptimizedControlPoints(
+              sourceX, sourceY, targetX, targetY, connectionIndex, connectionGroup.length
+            )
+            
+            // Calculate path for the connector
+            const path = `M ${sourceX} ${sourceY} C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${targetX} ${targetY}`
+            
+            // Get midpoint for label
+            const midPoint = getPointOnCurve(sourceX, sourceY, targetX, targetY, 0.5)
+            
+            // Check if this connection is selected
+            const isSelected = selectedConnection?.id === connection.id
+            
+            // Special styling for memory connections
+            const isMemoryConnection = sourceNode.type === 'memory' && 
+                                     targetNode.type === 'agent' && 
+                                     connection.targetHandle === 'memory'
+            
+            return (
+              <g 
+                key={connection.id} 
+                onClick={(e) => handleConnectionClick(e, connection.id)}
+                className="cursor-pointer"
+                style={{ pointerEvents: 'all' }}
+              >
+                {/* Invisible wider path for easier selection */}
+                <path
+                  d={path}
+                  stroke="transparent"
+                  strokeWidth="15" // Wider hit area for easier selection
+                  fill="none"
+                />
+                
+                {/* Visible path */}
+                <path
+                  d={path}
+                  stroke={isSelected ? '#ffffff' : isMemoryConnection ? '#a855f7' : 'currentColor'}
+                  strokeWidth={isSelected ? '3' : '2'}
+                  fill="none"
+                  className={`connection-path ${
+                    isSelected 
+                      ? 'text-primary-light' 
+                      : isMemoryConnection 
+                        ? 'text-purple-500' 
+                        : 'text-primary'
+                  }`}
+                />
+                
+                {/* Source and target dots */}
+                <circle 
+                  cx={sourceX} 
+                  cy={sourceY} 
+                  r="4" 
+                  fill={isMemoryConnection ? '#a855f7' : 'currentColor'} 
+                  className={isMemoryConnection ? 'text-purple-500' : 'text-primary'} 
+                />
+                <circle 
+                  cx={targetX} 
+                  cy={targetY} 
+                  r="4" 
+                  fill={isMemoryConnection ? '#a855f7' : 'currentColor'} 
+                  className={isMemoryConnection ? 'text-purple-500' : 'text-primary'} 
+                />
+                
+                {/* Connection label */}
+                {connection.label && (
+                  <foreignObject
+                    x={midPoint.x - 60}
+                    y={midPoint.y - 15}
+                    width="120"
+                    height="30"
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    <div className="flex items-center justify-center h-full">
+                      <div className={`connection-label ${
+                        isSelected 
+                          ? 'ring-2 ring-primary' 
+                          : isMemoryConnection 
+                            ? 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400' 
+                            : ''
+                      }`}>
+                        {connection.label}
+                      </div>
                     </div>
-                  </div>
-                </foreignObject>
-              )}
-            </g>
-          )
+                  </foreignObject>
+                )}
+              </g>
+            )
+          })
         })}
         
         {/* Render temporary connection while drawing */}
@@ -849,6 +1091,10 @@ const MainFeature = () => {
   // Properties panel for selected node
   const renderPropertiesPanel = () => {
     if (selectedConnection) {
+      // Get source and target node types for better display
+      const sourceNode = nodes.find(n => n.id === selectedConnection.source)
+      const targetNode = nodes.find(n => n.id === selectedConnection.target)
+      
       return (
         <div className="p-4">
           <div className="flex items-center gap-2 mb-4">
@@ -885,7 +1131,8 @@ const MainFeature = () => {
                 From
               </label>
               <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700">
-                {selectedConnection.source} ({selectedConnection.sourceHandle})
+                <span className="font-medium">{sourceNode?.data?.name || sourceNode?.label || 'Unknown'}</span>
+                <span className="text-surface-500"> ({selectedConnection.sourceHandle})</span>
               </div>
             </div>
             
@@ -894,7 +1141,8 @@ const MainFeature = () => {
                 To
               </label>
               <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700">
-                {selectedConnection.target} ({selectedConnection.targetHandle})
+                <span className="font-medium">{targetNode?.data?.name || targetNode?.label || 'Unknown'}</span>
+                <span className="text-surface-500"> ({selectedConnection.targetHandle})</span>
               </div>
             </div>
           </div>
