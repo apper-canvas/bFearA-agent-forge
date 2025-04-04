@@ -4,8 +4,10 @@ import {
   Plus, Minus, LayoutGrid, Download, Settings, X, 
   ChevronRight, ChevronDown, Move, Trash2, Edit3, 
   Save, Code, Cpu, Database, FileText, Workflow, 
-  Brain, Zap, ArrowRight
+  Brain, Zap, ArrowRight, Copy, Bookmark, History
 } from 'lucide-react'
+import WorkspaceControls from './WorkspaceControls'
+import Tooltip from './Tooltip'
 
 const MainFeature = () => {
   // Canvas state
@@ -860,8 +862,12 @@ const MainFeature = () => {
     const isSelected = selectedNode?.id === node.id
     
     return (
-      <div
+      <motion.div
         key={node.id}
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.2 }}
         className={`absolute n8n-node ${isSelected ? 'n8n-node-selected' : ''}`}
         style={{
           left: node.position.x,
@@ -874,19 +880,43 @@ const MainFeature = () => {
         <div className={`n8n-node-header ${nodeType.color} bg-opacity-90`}>
           <div className="flex items-center gap-2 text-white">
             {nodeType.icon}
-            <span className="font-medium text-sm">{node.data.name || node.label}</span>
+            <span className="font-medium text-sm truncate max-w-[120px]">{node.data.name || node.label}</span>
           </div>
-          <div className="flex items-center">
-            <button 
-              className="text-white opacity-70 hover:opacity-100"
-              onClick={(e) => {
-                e.stopPropagation()
-                setSelectedNode(node)
-                setSelectedConnection(null)
-              }}
-            >
-              <Settings size={14} />
-            </button>
+          <div className="flex items-center gap-1">
+            <Tooltip content="Duplicate" position="top">
+              <button 
+                className="text-white/70 hover:text-white transition-colors p-1 rounded hover:bg-white/10"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  // Duplicate node functionality
+                  const newNode = {
+                    ...node,
+                    id: `node-${Date.now()}`,
+                    position: {
+                      x: node.position.x + 20,
+                      y: node.position.y + 20
+                    }
+                  }
+                  setNodes(prev => [...prev, newNode])
+                }}
+              >
+                <Copy size={12} />
+              </button>
+            </Tooltip>
+            <Tooltip content="Configure" position="top">
+              <button 
+                className="text-white/70 hover:text-white transition-colors p-1 rounded hover:bg-white/10"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setSelectedNode(node)
+                  setSelectedConnection(null)
+                  setShowPropertiesPanel(true)
+                  setShowJsonPanel(false)
+                }}
+              >
+                <Settings size={12} />
+              </button>
+            </Tooltip>
           </div>
         </div>
         
@@ -905,21 +935,23 @@ const MainFeature = () => {
               
               return (
                 <div key={input} className="n8n-port-container">
-                  <div 
-                    className={`n8n-port n8n-port-input
-                      ${isHovered ? 'n8n-port-hover' : ''}
-                      ${isValidTarget ? 'n8n-port-valid' : ''}
-                      ${isConnected ? 'n8n-port-connected' : ''}
-                      ${hasMemory ? 'bg-purple-500 border-white dark:border-surface-800' : ''}
-                      ${isAddingConnection && connectingFrom ? 'animate-pulse' : ''}
-                    `}
-                    data-node-id={node.id}
-                    data-port-id={input}
-                    data-port-type="input"
-                    onMouseEnter={(e) => handlePortMouseEnter(e, node.id, input, true)}
-                    onMouseLeave={handlePortMouseLeave}
-                    onMouseDown={(e) => handlePortMouseDown(e, node.id, input, true)}
-                  />
+                  <Tooltip content={`Input: ${input}`} position="left">
+                    <div 
+                      className={`n8n-port n8n-port-input
+                        ${isHovered ? 'n8n-port-hover' : ''}
+                        ${isValidTarget ? 'n8n-port-valid' : ''}
+                        ${isConnected ? 'n8n-port-connected' : ''}
+                        ${hasMemory ? 'bg-purple-500 border-white dark:border-surface-800' : ''}
+                        ${isAddingConnection && connectingFrom ? 'animate-pulse' : ''}
+                      `}
+                      data-node-id={node.id}
+                      data-port-id={input}
+                      data-port-type="input"
+                      onMouseEnter={(e) => handlePortMouseEnter(e, node.id, input, true)}
+                      onMouseLeave={handlePortMouseLeave}
+                      onMouseDown={(e) => handlePortMouseDown(e, node.id, input, true)}
+                    />
+                  </Tooltip>
                   <span className="pl-4 text-xs text-surface-600 dark:text-surface-400">
                     {input}
                     {isMemoryPortOnAgent && hasMemory && (
@@ -949,25 +981,27 @@ const MainFeature = () => {
                       <span className="ml-1 text-green-500 font-bold">●</span>
                     )}
                   </span>
-                  <div 
-                    className={`n8n-port n8n-port-output
-                      ${isHovered ? 'n8n-port-hover' : ''}
-                      ${isConnecting ? 'n8n-port-active' : ''}
-                      ${isConnected ? 'n8n-port-connected' : ''}
-                    `}
-                    data-node-id={node.id}
-                    data-port-id={output}
-                    data-port-type="output"
-                    onMouseEnter={(e) => handlePortMouseEnter(e, node.id, output, false)}
-                    onMouseLeave={handlePortMouseLeave}
-                    onMouseDown={(e) => handlePortMouseDown(e, node.id, output, false)}
-                  />
+                  <Tooltip content={`Output: ${output}`} position="right">
+                    <div 
+                      className={`n8n-port n8n-port-output
+                        ${isHovered ? 'n8n-port-hover' : ''}
+                        ${isConnecting ? 'n8n-port-active' : ''}
+                        ${isConnected ? 'n8n-port-connected' : ''}
+                      `}
+                      data-node-id={node.id}
+                      data-port-id={output}
+                      data-port-type="output"
+                      onMouseEnter={(e) => handlePortMouseEnter(e, node.id, output, false)}
+                      onMouseLeave={handlePortMouseLeave}
+                      onMouseDown={(e) => handlePortMouseDown(e, node.id, output, false)}
+                    />
+                  </Tooltip>
                 </div>
               )
             })}
           </div>
         </div>
-      </div>
+      </motion.div>
     )
   }
   
@@ -1162,7 +1196,7 @@ const MainFeature = () => {
                 cx={port.position.x}
                 cy={port.position.y}
                 r="8"
-                className="fill-none stroke-green-500 stroke-2 animate-pulse"
+                className="fill-none stroke-green-500 stroke-2 animate-pulse-border"
               />
             ))}
           </g>
@@ -1213,7 +1247,15 @@ const MainFeature = () => {
               <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
                 From
               </label>
-              <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700">
+              <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-2">
+                <div className={`w-4 h-4 rounded-sm ${sourceNode?.color || 'bg-primary'} flex items-center justify-center`}>
+                  {nodeTypes.find(n => n.type === sourceNode?.type)?.icon && 
+                    React.cloneElement(
+                      nodeTypes.find(n => n.type === sourceNode?.type)?.icon, 
+                      { size: 12 }
+                    )
+                  }
+                </div>
                 <span className="font-medium">{sourceNode?.data?.name || sourceNode?.label || 'Unknown'}</span>
                 <span className="text-surface-500"> ({selectedConnection.sourceHandle})</span>
               </div>
@@ -1223,7 +1265,15 @@ const MainFeature = () => {
               <label className="text-sm font-medium text-surface-700 dark:text-surface-300">
                 To
               </label>
-              <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700">
+              <div className="text-sm p-2 bg-surface-50 dark:bg-surface-900 rounded-lg border border-surface-200 dark:border-surface-700 flex items-center gap-2">
+                <div className={`w-4 h-4 rounded-sm ${targetNode?.color || 'bg-primary'} flex items-center justify-center`}>
+                  {nodeTypes.find(n => n.type === targetNode?.type)?.icon && 
+                    React.cloneElement(
+                      nodeTypes.find(n => n.type === targetNode?.type)?.icon, 
+                      { size: 12 }
+                    )
+                  }
+                </div>
                 <span className="font-medium">{targetNode?.data?.name || targetNode?.label || 'Unknown'}</span>
                 <span className="text-surface-500"> ({selectedConnection.targetHandle})</span>
               </div>
@@ -1252,8 +1302,12 @@ const MainFeature = () => {
     
     if (!selectedNode) {
       return (
-        <div className="p-4 text-center text-surface-500">
-          <p>Select a node or connection to edit properties</p>
+        <div className="p-4 flex flex-col items-center justify-center h-full text-center text-surface-500">
+          <div className="mb-3 p-4 rounded-full bg-surface-100 dark:bg-surface-800">
+            <Settings size={24} className="text-surface-400" />
+          </div>
+          <p className="text-sm mb-1">Select a node or connection to edit properties</p>
+          <p className="text-xs text-surface-400">Drag components from the left panel to start building</p>
         </div>
       )
     }
@@ -1318,9 +1372,9 @@ const MainFeature = () => {
                     step={prop.step}
                     value={selectedNode.data[prop.name] || 0}
                     onChange={(e) => updateNodeProperty(prop.name, Number(e.target.value))}
-                    className="w-full"
+                    className="w-full accent-primary"
                   />
-                  <span className="text-sm text-surface-500">
+                  <span className="text-sm text-surface-500 min-w-[32px] text-right">
                     {selectedNode.data[prop.name]}
                   </span>
                 </div>
@@ -1365,18 +1419,36 @@ const MainFeature = () => {
     return (
       <div className="p-4">
         <div className="flex items-center justify-between mb-4">
-          <h3 className="font-medium">JSON Configuration</h3>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-6 rounded-md bg-surface-700 dark:bg-surface-600 flex items-center justify-center text-white">
+              <Code size={16} />
+            </div>
+            <h3 className="font-medium">JSON Configuration</h3>
+          </div>
           
-          <button
-            onClick={downloadJson}
-            className="btn btn-outline text-sm inline-flex items-center gap-1"
-          >
-            <Download size={16} />
-            Download
-          </button>
+          <div className="flex gap-2">
+            <button
+              onClick={() => {
+                navigator.clipboard.writeText(json)
+                // Show a temporary toast or alert that it was copied
+                alert('JSON copied to clipboard')
+              }}
+              className="btn btn-outline text-sm inline-flex items-center gap-1"
+            >
+              <Copy size={14} />
+              Copy
+            </button>
+            <button
+              onClick={downloadJson}
+              className="btn btn-outline text-sm inline-flex items-center gap-1"
+            >
+              <Download size={14} />
+              Download
+            </button>
+          </div>
         </div>
         
-        <pre className="bg-surface-100 dark:bg-surface-800 p-3 rounded-lg text-xs overflow-auto max-h-[500px] border border-surface-200 dark:border-surface-700">
+        <pre className="bg-surface-100 dark:bg-surface-800 p-3 rounded-lg text-xs overflow-auto max-h-[500px] border border-surface-200 dark:border-surface-700 font-mono">
           {json}
         </pre>
       </div>
@@ -1396,7 +1468,7 @@ const MainFeature = () => {
   }, [isAddingConnection])
   
   return (
-    <div className="flex h-[calc(100vh-140px)]">
+    <div className="flex h-[calc(100vh-72px)]">
       {/* Node palette */}
       <AnimatePresence initial={false}>
         {showNodePanel && (
@@ -1411,14 +1483,32 @@ const MainFeature = () => {
               <h3 className="font-medium">Components</h3>
               <button
                 onClick={() => setShowNodePanel(false)}
-                className="text-surface-500 hover:text-surface-700 dark:hover:text-surface-300"
+                className="text-surface-500 hover:text-surface-700 dark:hover:text-surface-300 p-1 rounded-md hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors"
               >
                 <X size={18} />
               </button>
             </div>
             
-            <div className="n8n-panel-body space-y-3">
-              {nodeTypes.map(nodeType => (
+            <div className="flex border-b border-surface-200 dark:border-surface-700">
+              <button className="n8n-panel-tab n8n-panel-tab-active">
+                AI Components
+              </button>
+              <button className="n8n-panel-tab n8n-panel-tab-inactive">
+                Saved
+              </button>
+            </div>
+            
+            <div className="flex px-3 py-2 border-b border-surface-200 dark:border-surface-700">
+              <input
+                type="text"
+                placeholder="Search components..."
+                className="w-full text-sm border border-surface-200 dark:border-surface-700 bg-surface-50 dark:bg-surface-800 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </div>
+            
+            <div className="n8n-panel-body space-y-3 overflow-y-auto">
+              <div className="text-xs font-medium text-surface-500 px-1">AGENTS & MODELS</div>
+              {nodeTypes.filter(nt => ['agent', 'memory'].includes(nt.type)).map(nodeType => (
                 <motion.div
                   key={nodeType.type}
                   whileHover={{ scale: 1.02 }}
@@ -1435,6 +1525,46 @@ const MainFeature = () => {
                   </div>
                 </motion.div>
               ))}
+              
+              <div className="text-xs font-medium text-surface-500 px-1 pt-3">DATA & RETRIEVAL</div>
+              {nodeTypes.filter(nt => ['retriever', 'documentLoader', 'vectorStore'].includes(nt.type)).map(nodeType => (
+                <motion.div
+                  key={nodeType.type}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`${nodeType.color} rounded-n8n p-3 text-white cursor-grab shadow-sm hover:shadow-md transition-all duration-200`}
+                  onClick={() => addNode(nodeType.type)}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, nodeType.type)}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="flex items-center gap-2">
+                    {nodeType.icon}
+                    <span className="font-medium">{nodeType.label}</span>
+                  </div>
+                </motion.div>
+              ))}
+              
+              <div className="text-xs font-medium text-surface-500 px-1 pt-3">TRANSFORMERS & TOOLS</div>
+              {nodeTypes.filter(nt => ['outputTransformer', 'tool'].includes(nt.type)).map(nodeType => (
+                <motion.div
+                  key={nodeType.type}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.98 }}
+                  className={`${nodeType.color} rounded-n8n p-3 text-white cursor-grab shadow-sm hover:shadow-md transition-all duration-200`}
+                  onClick={() => addNode(nodeType.type)}
+                  draggable
+                  onDragStart={(e) => handleDragStart(e, nodeType.type)}
+                  onDragEnd={handleDragEnd}
+                >
+                  <div className="flex items-center gap-2">
+                    {nodeType.icon}
+                    <span className="font-medium">{nodeType.label}</span>
+                  </div>
+                </motion.div>
+              ))}
+              
+              <div className="pb-4"></div>
             </div>
           </motion.div>
         )}
@@ -1443,65 +1573,69 @@ const MainFeature = () => {
       {/* Canvas */}
       <div className="flex-grow relative overflow-hidden n8n-canvas border-r">
         {/* Connection mode indicator */}
-        {isAddingConnection && (
-          <div className="absolute top-14 left-1/2 transform -translate-x-1/2 z-20 bg-primary text-white px-4 py-2 rounded-lg shadow-lg">
-            <div className="flex items-center gap-2">
-              <span className="animate-pulse">●</span>
-              <span>Creating connection from {connectingFrom?.portId} - Click on an input port to connect or press ESC to cancel</span>
+        <AnimatePresence>
+          {isAddingConnection && (
+            <motion.div 
+              initial={{ opacity: 0, y: -20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -20 }}
+              className="absolute top-14 left-1/2 transform -translate-x-1/2 z-20 bg-primary text-white px-4 py-2 rounded-lg shadow-lg"
+            >
+              <div className="flex items-center gap-2">
+                <span className="animate-pulse">●</span>
+                <span>Creating connection from <span className="font-semibold">{connectingFrom?.portId}</span> - Click on an input port to connect or press <kbd className="px-1.5 py-0.5 bg-primary-dark rounded text-xs">ESC</kbd> to cancel</span>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Empty state message */}
+        {nodes.length === 0 && (
+          <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+            <div className="text-center p-8 max-w-md">
+              <div className="mb-4 mx-auto w-16 h-16 rounded-full bg-surface-100 dark:bg-surface-800 flex items-center justify-center">
+                <LayoutGrid size={24} className="text-surface-400" />
+              </div>
+              <h3 className="text-lg font-medium text-surface-800 dark:text-surface-200 mb-2">Start Building Your Workflow</h3>
+              <p className="text-sm text-surface-600 dark:text-surface-400 mb-6">Drag components from the panel on the left or use the quick actions below to create your agent workflow.</p>
+              <div className="flex flex-wrap gap-2 justify-center">
+                <button className="workspace-action-btn" onClick={() => addNode('agent')}>
+                  <Cpu size={14} className="text-blue-500" />
+                  <span>Add Agent</span>
+                </button>
+                <button className="workspace-action-btn" onClick={() => addNode('memory')}>
+                  <Brain size={14} className="text-purple-500" />
+                  <span>Add Memory</span>
+                </button>
+                <button className="workspace-action-btn" onClick={() => addNode('retriever')}>
+                  <Database size={14} className="text-green-500" />
+                  <span>Add Retriever</span>
+                </button>
+              </div>
             </div>
           </div>
         )}
       
         {/* Canvas controls */}
-        <div className="absolute top-3 left-3 z-10 flex items-center gap-2">
-          {!showNodePanel && (
-            <button
-              onClick={() => setShowNodePanel(true)}
-              className="btn btn-outline bg-white dark:bg-surface-700 text-sm p-2"
-              title="Show components"
-            >
-              <ChevronRight size={18} />
-            </button>
-          )}
-          
-          <div className="bg-white dark:bg-surface-700 rounded-lg shadow-sm flex items-center p-1">
-            <button
-              onClick={handleZoomOut}
-              className="p-1 text-surface-600 hover:text-surface-900 dark:text-surface-400 dark:hover:text-surface-100"
-              title="Zoom out"
-            >
-              <Minus size={18} />
-            </button>
-            
-            <div className="px-2 text-sm text-surface-600 dark:text-surface-400">
-              {Math.round(scale * 100)}%
-            </div>
-            
-            <button
-              onClick={handleZoomIn}
-              className="p-1 text-surface-600 hover:text-surface-900 dark:text-surface-400 dark:hover:text-surface-100"
-              title="Zoom in"
-            >
-              <Plus size={18} />
-            </button>
-          </div>
-          
+        <WorkspaceControls
+          scale={scale}
+          handleZoomIn={handleZoomIn}
+          handleZoomOut={handleZoomOut}
+          handleResetView={handleResetView}
+          autoLayoutNodes={autoLayoutNodes}
+          downloadJson={downloadJson}
+        />
+        
+        {!showNodePanel && (
           <button
-            onClick={handleResetView}
-            className="btn btn-outline bg-white dark:bg-surface-700 text-sm p-2"
-            title="Reset view"
+            onClick={() => setShowNodePanel(true)}
+            className="absolute top-3 left-3 z-10 workspace-action-btn"
+            title="Show components"
           >
-            <Move size={18} />
+            <ChevronRight size={14} />
+            <span>Components</span>
           </button>
-          
-          <button
-            onClick={autoLayoutNodes}
-            className="btn btn-outline bg-white dark:bg-surface-700 text-sm p-2"
-            title="Auto layout"
-          >
-            <LayoutGrid size={18} />
-          </button>
-        </div>
+        )}
         
         {/* Canvas area */}
         <div
@@ -1526,20 +1660,34 @@ const MainFeature = () => {
             {renderConnections()}
             
             {/* Nodes */}
-            {nodes.map(renderNode)}
+            <AnimatePresence>
+              {nodes.map(renderNode)}
+            </AnimatePresence>
           </div>
         </div>
         
         {/* JSON button */}
         <div className="absolute bottom-3 left-3 z-10">
           <button
-            onClick={() => setShowJsonPanel(!showJsonPanel)}
-            className={`btn ${showJsonPanel ? 'btn-primary' : 'btn-outline bg-white dark:bg-surface-700'} text-sm inline-flex items-center gap-1`}
+            onClick={() => {
+              setShowJsonPanel(!showJsonPanel)
+              if (!showJsonPanel) {
+                setShowPropertiesPanel(false)
+              }
+            }}
+            className={`workspace-action-btn ${showJsonPanel ? 'bg-primary text-white hover:bg-primary-dark' : ''}`}
             title="Show JSON"
           >
-            <Code size={16} />
-            {showJsonPanel ? 'Hide' : 'Show'} JSON
+            <Code size={14} />
+            <span>{showJsonPanel ? 'Hide' : 'Show'} JSON</span>
           </button>
+        </div>
+
+        {/* Canvas info */}
+        <div className="absolute bottom-3 right-3 z-10 flex gap-2 text-xs text-surface-500 dark:text-surface-400">
+          <span>{nodes.length} nodes</span>
+          <span>•</span>
+          <span>{connections.length} connections</span>
         </div>
       </div>
       
